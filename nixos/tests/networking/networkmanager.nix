@@ -162,6 +162,103 @@ let
         client.wait_until_succeeds("ping -c 1 fd00:1234:5678:1::23")
       '';
     };
+    shared = {
+      name = "shared";
+      nodes = {
+        inherit router;
+        client = clientConfig {
+          networking.networkmanager.logLevel = "DEBUG";
+          networking.networkmanager.ensureProfiles.profiles.shared = {
+            connection = {
+              interface-name = "eth0";
+              type = "ethernet";
+              id = "shared";
+            };
+            ipv4.method = "shared";
+            ipv4.addresses = "192.168.21.42/24";
+          };
+        };
+      };
+      testScript = ''
+        start_all()
+        router.systemctl("start network-online.target")
+        router.wait_for_unit("network-online.target")
+        client.wait_for_unit("NetworkManager.service")
+        with subtest("Test shared connection type and make sure the binaries are found."):
+            # nftables binary is found:
+            client.wait_until_succeeds("journalctl -u NetworkManager | grep -q 'trying to find nftables (nft) backend.'")
+            client.wait_until_succeeds("journalctl -u NetworkManager | grep -q 'nft.*: communicate with nft'")
+            # dhcpcd binary is found:
+            client.wait_until_succeeds("journalctl -u NetworkManager | grep -q \"enabled DHCP client \'dhcpcd\'\"")
+            # dnsmasq binary is found:
+            client.wait_until_succeeds("journalctl -u NetworkManager | grep -q 'dnsmasq-manager: dnsmasq started with pid'")
+      '';
+    };
+    openconnect = {
+      name = "openconnect";
+      nodes = {
+        router = {
+          networking.firewall.enable = false;
+          services.ocserv = {
+            enable = true;
+            # TODO: Certificate auth to make this work.
+            config = ''
+              # user = user; pass = password
+              auth = "certificate"
+              ca-cert = ${./server-cert.pem}
+              tcp-port = 443
+              udp-port = 443
+              server-cert = ${./server-cert.pem}
+              server-key =  ${./server-key.pem}
+              socket-file = ocserv.socket
+              ipv4-network = 192.168.100.0
+              ipv4-netmask = 255.255.255.0
+              cert-user-oid = 0.9.2342.19200300.100.1.1
+              device = vpns
+              predictable-ips = true
+            '';
+          };
+        };
+        client = clientConfig {
+          networking.networkmanager.logLevel = "DEBUG";
+          networking.networkmanager.ensureProfiles.profiles.default = {
+            ipv4.method = "manual";
+            ipv4.addresses = "192.168.1.42/24";
+            ipv4.gateway = "192.168.1.1";
+            ipv6.method = "manual";
+            ipv6.addresses = "fd00:1234:5678:1::42/64";
+            ipv6.gateway = "fd00:1234:5678:1::1";
+          };
+          networking.networkmanager.ensureProfiles.profiles.shared = {
+            connection = {
+              type = "vpn";
+              id = "ocvpn";
+            };
+            vpn = {
+              service-type = "org.freedesktop.NetworkManager.openconnect";
+              cookie-flags = "2";
+              gateway = "router";
+              secrets = "gateway=router";
+              usercert = "${./user.p12}";
+            };
+          };
+        };
+      };
+      testScript = ''
+        start_all()
+        #router.systemctl("start network-online.target")
+        #router.wait_for_unit("network-online.target")
+        client.wait_for_unit("NetworkManager.service")
+        with subtest("Test shared connection type and make sure the binaries are found."):
+            # nftables binary is found:
+            client.wait_until_succeeds("journalctl -u NetworkManager | grep -q 'trying to find nftables (nft) backend.'")
+            client.wait_until_succeeds("journalctl -u NetworkManager | grep -q 'nft.*: communicate with nft'")
+            # dhcpcd binary is found:
+            client.wait_until_succeeds("journalctl -u NetworkManager | grep -q \"enabled DHCP client \'dhcpcd\'\"")
+            # dnsmasq binary is found:
+            client.wait_until_succeeds("journalctl -u NetworkManager | grep -q 'dnsmasq-manager: dnsmasq started with pid'")
+      '';
+    };
   };
 in lib.mapAttrs (lib.const (attrs: makeTest (attrs // {
   name = "${attrs.name}-Networking-NetworkManager";
