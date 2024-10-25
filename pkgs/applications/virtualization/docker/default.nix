@@ -160,6 +160,18 @@ rec {
         ++ lib.optional (!withBtrfs) "exclude_graphdriver_btrfs"
         ++ lib.optional (!withLvm) "exclude_graphdriver_devicemapper"
         ++ lib.optional withSeccomp "seccomp";
+
+      meta = with lib; {
+          homepage = "https://mobyproject.org/";
+          description = "A collaborative project for the container ecosystem to assemble container-based systems.";
+          license = licenses.asl20;
+          maintainers = with maintainers; [
+            offline
+            vdemeester
+            periklis
+            teutat3s
+          ];
+        };
     });
 
     plugins = lib.optional buildxSupport docker-buildx
