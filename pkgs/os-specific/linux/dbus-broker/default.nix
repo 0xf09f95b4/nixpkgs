@@ -22,6 +22,16 @@ let
       };
       nativeBuildInputs = [ meson ninja pkg-config ];
       inherit buildInputs;
+      meta = with lib; {
+        description = "The C-Util Project is a collection of utility libraries for the C11 language.";
+        homepage = "https://c-util.github.io/";
+        license = [
+          licenses.asl20
+          licenses.lgpl21Plus
+        ];
+        maintainers = with maintainers; [ peterhoeg ];
+        platforms = platforms.linux;
+      };
     };
 
   # These libraries are not used outside of dbus-broker.
